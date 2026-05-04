@@ -78,7 +78,7 @@ Claude runs `railway domain` to give the app a public address (something like `y
 
 ### 6. Seed the mock data
 
-Claude calls a one-time `/api/seed` endpoint (protected by a token) to fill the database with realistic mock companies, contacts, and deals.
+Claude runs a one-time seed script (`npm run db:seed`) against the deployed database to fill it with realistic mock companies, contacts, and deals.
 
 ### 7. Done
 

@@ -1,0 +1,85 @@
+// Prisma schema for the Demo CRM
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id          String    @id @default(cuid())
+  name        String
+  industry    String
+  website     String?
+  employees   Int       @default(0)
+  annualRevenue Decimal @default(0) @db.Decimal(14, 2)
+  city        String?
+  country     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  contacts    Contact[]
+  deals       Deal[]
+
+  @@index([name])
+  @@index([industry])
+}
+
+model Contact {
+  id         String   @id @default(cuid())
+  firstName  String
+  lastName   String
+  email      String   @unique
+  phone      String?
+  title      String?
+  status     ContactStatus @default(LEAD)
+  companyId  String?
+  company    Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  deals      Deal[]
+
+  @@index([lastName])
+  @@index([status])
+  @@index([companyId])
+}
+
+enum ContactStatus {
+  LEAD
+  QUALIFIED
+  CUSTOMER
+  CHURNED
+}
+
+model Deal {
+  id          String   @id @default(cuid())
+  title       String
+  value       Decimal  @default(0) @db.Decimal(14, 2)
+  stage       DealStage @default(PROSPECTING)
+  expectedCloseDate DateTime?
+  closedAt    DateTime?
+  companyId   String?
+  contactId   String?
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  contact     Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([stage])
+  @@index([companyId])
+  @@index([contactId])
+}
+
+enum DealStage {
+  PROSPECTING
+  QUALIFICATION
+  PROPOSAL
+  NEGOTIATION
+  CLOSED_WON
+  CLOSED_LOST
+}

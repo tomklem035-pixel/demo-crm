@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Modal from "@/components/Modal";
 import { formatCurrency, formatDate, stageColor, statusColor } from "@/lib/format";
 
 type ContactStatus = "LEAD" | "QUALIFIED" | "CUSTOMER" | "CHURNED";
@@ -46,6 +47,23 @@ type Company = { id: string; name: string };
 type ContactOption = { id: string; firstName: string; lastName: string };
 type Tab = "deals" | "activity" | "tasks";
 
+const CONTACT_STATUSES: ContactStatus[] = [
+  "LEAD",
+  "QUALIFIED",
+  "CUSTOMER",
+  "CHURNED",
+];
+
+type ContactFormState = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  title: string;
+  status: ContactStatus;
+  companyId: string;
+};
+
 function initials(firstName: string, lastName: string): string {
   return `${firstName[0] ?? ""}${lastName[0] ?? ""}`.toUpperCase();
 }
@@ -62,6 +80,79 @@ export default function ContactDetailView({
   const router = useRouter();
   const [contact, setContact] = useState<Contact>(initialContact);
   const [tab, setTab] = useState<Tab>("deals");
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [contactForm, setContactForm] = useState<ContactFormState>({
+    firstName: contact.firstName,
+    lastName: contact.lastName,
+    email: contact.email,
+    phone: contact.phone ?? "",
+    title: contact.title ?? "",
+    status: contact.status,
+    companyId: contact.companyId ?? "",
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  function openEdit() {
+    setContactForm({
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      email: contact.email,
+      phone: contact.phone ?? "",
+      title: contact.title ?? "",
+      status: contact.status,
+      companyId: contact.companyId ?? "",
+    });
+    setEditError(null);
+    setEditOpen(true);
+  }
+
+  async function submitEdit(e: React.FormEvent) {
+    e.preventDefault();
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      const res = await fetch(`/api/contacts/${contact.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: contactForm.firstName,
+          lastName: contactForm.lastName,
+          email: contactForm.email,
+          phone: contactForm.phone || null,
+          title: contactForm.title || null,
+          status: contactForm.status,
+          companyId: contactForm.companyId || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "Request failed");
+      }
+      const saved = await res.json();
+      const updatedCompany = saved.companyId
+        ? companies.find((c) => c.id === saved.companyId) ?? null
+        : null;
+      setContact((prev) => ({
+        ...prev,
+        firstName: saved.firstName,
+        lastName: saved.lastName,
+        email: saved.email,
+        phone: saved.phone,
+        title: saved.title,
+        status: saved.status,
+        companyId: saved.companyId,
+        company: updatedCompany as Contact["company"],
+      }));
+      setEditOpen(false);
+      router.refresh();
+    } catch (err: any) {
+      setEditError(err.message ?? "Something went wrong");
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
 
   const titleLine = [contact.title, contact.company?.name]
     .filter(Boolean)
@@ -136,7 +227,7 @@ export default function ContactDetailView({
             </div>
           </div>
         </div>
-        <button className="btn-secondary" onClick={() => {}}>
+        <button className="btn-secondary" onClick={openEdit}>
           Edit Contact
         </button>
       </div>
@@ -246,6 +337,128 @@ export default function ContactDetailView({
           </p>
         </div>
       )}
+      {/* Edit Contact modal */}
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit Contact">
+        <form onSubmit={submitEdit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">First name</label>
+              <input
+                className="input"
+                required
+                value={contactForm.firstName}
+                onChange={(e) =>
+                  setContactForm({ ...contactForm, firstName: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="label">Last name</label>
+              <input
+                className="input"
+                required
+                value={contactForm.lastName}
+                onChange={(e) =>
+                  setContactForm({ ...contactForm, lastName: e.target.value })
+                }
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label">Email</label>
+            <input
+              className="input"
+              type="email"
+              required
+              value={contactForm.email}
+              onChange={(e) =>
+                setContactForm({ ...contactForm, email: e.target.value })
+              }
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Phone</label>
+              <input
+                className="input"
+                value={contactForm.phone}
+                onChange={(e) =>
+                  setContactForm({ ...contactForm, phone: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="label">Title</label>
+              <input
+                className="input"
+                value={contactForm.title}
+                onChange={(e) =>
+                  setContactForm({ ...contactForm, title: e.target.value })
+                }
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Status</label>
+              <select
+                className="input"
+                value={contactForm.status}
+                onChange={(e) =>
+                  setContactForm({
+                    ...contactForm,
+                    status: e.target.value as ContactStatus,
+                  })
+                }
+              >
+                {CONTACT_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Company</label>
+              <select
+                className="input"
+                value={contactForm.companyId}
+                onChange={(e) =>
+                  setContactForm({ ...contactForm, companyId: e.target.value })
+                }
+              >
+                <option value="">— None —</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {editError && (
+            <div className="text-sm text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/10 ring-1 ring-rose-200 dark:ring-rose-500/30 rounded-lg px-3 py-2">
+              {editError}
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setEditOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={editSubmitting}
+            >
+              {editSubmitting ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

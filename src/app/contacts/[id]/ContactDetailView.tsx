@@ -47,6 +47,31 @@ type Company = { id: string; name: string };
 type ContactOption = { id: string; firstName: string; lastName: string };
 type Tab = "deals" | "activity" | "tasks";
 
+const DEAL_STAGES: DealStage[] = [
+  "PROSPECTING",
+  "QUALIFICATION",
+  "PROPOSAL",
+  "NEGOTIATION",
+  "CLOSED_WON",
+  "CLOSED_LOST",
+];
+
+type DealFormState = {
+  title: string;
+  value: string;
+  stage: DealStage;
+  expectedCloseDate: string;
+  companyId: string;
+};
+
+const EMPTY_DEAL_FORM: DealFormState = {
+  title: "",
+  value: "",
+  stage: "PROSPECTING",
+  expectedCloseDate: "",
+  companyId: "",
+};
+
 const CONTACT_STATUSES: ContactStatus[] = [
   "LEAD",
   "QUALIFIED",
@@ -80,6 +105,59 @@ export default function ContactDetailView({
   const router = useRouter();
   const [contact, setContact] = useState<Contact>(initialContact);
   const [tab, setTab] = useState<Tab>("deals");
+
+  const [dealOpen, setDealOpen] = useState(false);
+  const [dealForm, setDealForm] = useState<DealFormState>(EMPTY_DEAL_FORM);
+  const [dealSubmitting, setDealSubmitting] = useState(false);
+  const [dealError, setDealError] = useState<string | null>(null);
+
+  async function submitDeal(e: React.FormEvent) {
+    e.preventDefault();
+    setDealSubmitting(true);
+    setDealError(null);
+    try {
+      const res = await fetch("/api/deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: dealForm.title,
+          value: dealForm.value ? parseFloat(dealForm.value) : 0,
+          stage: dealForm.stage,
+          expectedCloseDate: dealForm.expectedCloseDate || null,
+          contactId: contact.id,
+          companyId: dealForm.companyId || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "Request failed");
+      }
+      const saved = await res.json();
+      const newDeal: Deal = {
+        id: saved.id,
+        title: saved.title,
+        value: String(saved.value),
+        stage: saved.stage,
+        expectedCloseDate: saved.expectedCloseDate,
+        closedAt: saved.closedAt,
+        companyId: saved.companyId,
+        contactId: saved.contactId,
+        createdAt: saved.createdAt,
+        updatedAt: saved.updatedAt,
+      };
+      setContact((prev) => ({
+        ...prev,
+        deals: [newDeal, ...prev.deals],
+      }));
+      setDealForm(EMPTY_DEAL_FORM);
+      setDealOpen(false);
+      router.refresh();
+    } catch (err: any) {
+      setDealError(err.message ?? "Something went wrong");
+    } finally {
+      setDealSubmitting(false);
+    }
+  }
 
   const [editOpen, setEditOpen] = useState(false);
   const [contactForm, setContactForm] = useState<ContactFormState>({
@@ -260,7 +338,14 @@ export default function ContactDetailView({
               {pipelineDeals.length > 0 &&
                 ` · ${formatCurrency(pipelineValue)} pipeline`}
             </p>
-            <button className="btn-primary" onClick={() => {}}>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setDealForm(EMPTY_DEAL_FORM);
+                setDealError(null);
+                setDealOpen(true);
+              }}
+            >
               + New Deal
             </button>
           </div>
@@ -334,6 +419,119 @@ export default function ContactDetailView({
           </p>
         </div>
       )}
+      {/* New Deal modal */}
+      <Modal open={dealOpen} onClose={() => setDealOpen(false)} title="New Deal">
+        <form onSubmit={submitDeal} className="space-y-4">
+          <div>
+            <label className="label">Title</label>
+            <input
+              className="input"
+              required
+              placeholder="e.g. Q3 Expansion"
+              value={dealForm.title}
+              onChange={(e) =>
+                setDealForm({ ...dealForm, title: e.target.value })
+              }
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Value ($)</label>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0"
+                value={dealForm.value}
+                onChange={(e) =>
+                  setDealForm({ ...dealForm, value: e.target.value })
+                }
+              />
+            </div>
+            <div>
+              <label className="label">Stage</label>
+              <select
+                className="input"
+                value={dealForm.stage}
+                onChange={(e) =>
+                  setDealForm({
+                    ...dealForm,
+                    stage: e.target.value as DealStage,
+                  })
+                }
+              >
+                {DEAL_STAGES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Expected close date</label>
+              <input
+                className="input"
+                type="date"
+                value={dealForm.expectedCloseDate}
+                onChange={(e) =>
+                  setDealForm({
+                    ...dealForm,
+                    expectedCloseDate: e.target.value,
+                  })
+                }
+              />
+            </div>
+            <div>
+              <label className="label">Company</label>
+              <select
+                className="input"
+                value={dealForm.companyId}
+                onChange={(e) =>
+                  setDealForm({ ...dealForm, companyId: e.target.value })
+                }
+              >
+                <option value="">— None —</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="label">Contact</label>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              {contact.firstName} {contact.lastName}
+            </p>
+          </div>
+          {dealError && (
+            <div className="text-sm text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/10 ring-1 ring-rose-200 dark:ring-rose-500/30 rounded-lg px-3 py-2">
+              {dealError}
+            </div>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setDealOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={dealSubmitting}
+            >
+              {dealSubmitting ? "Saving…" : "Create deal"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
       {/* Edit Contact modal */}
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit Contact">
         <form onSubmit={submitEdit} className="space-y-4">

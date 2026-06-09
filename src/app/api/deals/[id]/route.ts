@@ -29,6 +29,9 @@ export async function PATCH(
   if (stage !== undefined && !ALLOWED_STAGES.includes(stage as DealStage)) {
     return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
   }
+  if (value !== undefined && value !== "" && isNaN(parseFloat(value))) {
+    return NextResponse.json({ error: "value must be a valid number" }, { status: 400 });
+  }
 
   try {
     const deal = await prisma.deal.update({
@@ -55,6 +58,12 @@ export async function PATCH(
   } catch (e: any) {
     if (e?.code === "P2025") {
       return NextResponse.json({ error: "Deal not found" }, { status: 404 });
+    }
+    if (e?.code === "P2003") {
+      return NextResponse.json(
+        { error: "Referenced company or contact not found" },
+        { status: 400 },
+      );
     }
     return NextResponse.json({ error: "Failed to update deal" }, { status: 500 });
   }

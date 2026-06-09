@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import Modal from "@/components/Modal";
@@ -209,8 +210,13 @@ export default function ContactsView({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {filtered.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                  <td className="table-td font-medium text-slate-900 dark:text-slate-100">
-                    {c.firstName} {c.lastName}
+                  <td className="table-td font-medium">
+                    <Link
+                      href={`/contacts/${c.id}`}
+                      className="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 font-medium"
+                    >
+                      {c.firstName} {c.lastName}
+                    </Link>
                   </td>
                   <td className="table-td">{c.title ?? "—"}</td>
                   <td className="table-td">{c.company?.name ?? "—"}</td>

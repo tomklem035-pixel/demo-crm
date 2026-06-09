@@ -28,7 +28,7 @@ export async function PATCH(
         ...(dueDate !== undefined && {
           dueDate: dueDate ? new Date(dueDate) : null,
         }),
-        ...(completed !== undefined && { completed: Boolean(completed) }),
+        ...(completed !== undefined && { completed: completed === true || completed === "true" }),
         ...(dealId !== undefined && { dealId: dealId || null }),
         ...(contactId !== undefined && { contactId: contactId || null }),
       },

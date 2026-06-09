@@ -32,6 +32,9 @@ export async function PATCH(
   if (value !== undefined && value !== "" && isNaN(parseFloat(value))) {
     return NextResponse.json({ error: "value must be a valid number" }, { status: 400 });
   }
+  if (value !== undefined && value !== "" && parseFloat(value) < 0) {
+    return NextResponse.json({ error: "value must be >= 0" }, { status: 400 });
+  }
 
   try {
     const deal = await prisma.deal.update({

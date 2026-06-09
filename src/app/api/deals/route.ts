@@ -16,14 +16,18 @@ type DealStage = (typeof ALLOWED_STAGES)[number];
 const CLOSED_STAGES = new Set<string>(["CLOSED_WON", "CLOSED_LOST"]);
 
 export async function GET() {
-  const deals = await prisma.deal.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      company: { select: { id: true, name: true } },
-      contact: { select: { id: true, firstName: true, lastName: true } },
-    },
-  });
-  return NextResponse.json(deals);
+  try {
+    const deals = await prisma.deal.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        company: { select: { id: true, name: true } },
+        contact: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+    return NextResponse.json(deals);
+  } catch {
+    return NextResponse.json({ error: "Failed to fetch deals" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -38,11 +42,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid stage" }, { status: 400 });
   }
 
+  const numValue = value !== undefined && value !== "" ? parseFloat(value) : 0;
+  if (numValue < 0) {
+    return NextResponse.json({ error: "value must be >= 0" }, { status: 400 });
+  }
+
   try {
     const deal = await prisma.deal.create({
       data: {
         title,
-        value: value !== undefined && value !== "" ? parseFloat(value) : 0,
+        value: numValue,
         stage: (stage as DealStage) ?? "PROSPECTING",
         expectedCloseDate: expectedCloseDate ? new Date(expectedCloseDate) : null,
         closedAt: stage && CLOSED_STAGES.has(stage) ? new Date() : null,

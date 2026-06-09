@@ -90,7 +90,10 @@ export default function DealsView({
   }, [deals, search, stageFilter]);
 
   const totalPipeline = useMemo(
-    () => deals.reduce((sum, d) => sum + Number(d.value), 0),
+    () =>
+      deals
+        .filter((d) => d.stage !== "CLOSED_LOST")
+        .reduce((sum, d) => sum + Number(d.value), 0),
     [deals],
   );
 

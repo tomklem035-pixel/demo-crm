@@ -119,6 +119,7 @@ model Task {
   contact   Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   deal      Deal?     @relation(fields: [dealId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([contactId])
   @@index([dealId])

@@ -131,9 +131,6 @@ export default function ContactDetailView({
         throw new Error(data?.error ?? "Request failed");
       }
       const saved = await res.json();
-      const updatedCompany = saved.companyId
-        ? companies.find((c) => c.id === saved.companyId) ?? null
-        : null;
       setContact((prev) => ({
         ...prev,
         firstName: saved.firstName,
@@ -143,7 +140,7 @@ export default function ContactDetailView({
         title: saved.title,
         status: saved.status,
         companyId: saved.companyId,
-        company: updatedCompany as Contact["company"],
+        company: saved.company,
       }));
       setEditOpen(false);
       router.refresh();

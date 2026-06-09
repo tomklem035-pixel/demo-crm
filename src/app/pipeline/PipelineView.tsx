@@ -4,6 +4,15 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "@/components/Modal";
 import { formatCurrency } from "@/lib/format";
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 
 type ActiveStage = "PROSPECTING" | "QUALIFICATION" | "PROPOSAL" | "NEGOTIATION";
 type DealStage = ActiveStage | "CLOSED_WON" | "CLOSED_LOST";
@@ -102,6 +111,91 @@ function buildColumns(deals: Deal[]): Record<ActiveStage, Deal[]> {
   return cols;
 }
 
+function DroppableColumn({
+  stage,
+  isOver,
+  children,
+}: {
+  stage: ActiveStage;
+  isOver: boolean;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({ id: stage });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex flex-col gap-2 min-h-[80px] rounded-lg p-1 -m-1 transition-colors ${
+        isOver ? "bg-slate-100 dark:bg-slate-800/60" : ""
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DraggableCard({
+  deal,
+  index,
+  accentColor,
+  dragError,
+  onClick,
+}: {
+  deal: Deal;
+  index: number;
+  accentColor: string;
+  dragError: string | null;
+  onClick: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id: deal.id });
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+    : undefined;
+  const displayName = deal.contact
+    ? `${deal.contact.firstName} ${deal.contact.lastName}`
+    : deal.company?.name ?? null;
+  const initial = displayName ? displayName[0].toUpperCase() : "?";
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ ...style, borderTopWidth: "3px", borderTopColor: accentColor }}
+      {...listeners}
+      {...attributes}
+      onClick={onClick}
+      className={`bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow select-none touch-none ${
+        isDragging ? "opacity-40 shadow-lg" : ""
+      }`}
+    >
+      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 leading-snug">
+        {deal.title}
+      </p>
+      {displayName && (
+        <div className="flex items-center gap-1.5 mb-2">
+          <div
+            className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${avatarColor(index)}`}
+          >
+            {initial}
+          </div>
+          <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+            {displayName}
+          </span>
+        </div>
+      )}
+      <div className="flex items-center justify-between mt-1">
+        <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+          {formatCurrency(deal.value)}
+        </span>
+        <span className="text-xs text-slate-400">
+          {shortDate(deal.expectedCloseDate)}
+        </span>
+      </div>
+      {dragError && (
+        <p className="text-xs text-rose-500 mt-1.5">{dragError}</p>
+      )}
+    </div>
+  );
+}
+
 export default function PipelineView({
   initialDeals,
   companies,
@@ -120,6 +214,11 @@ export default function PipelineView({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [dragError, setDragError] = useState<{ dealId: string; message: string } | null>(null);
+  const [activeOverStage, setActiveOverStage] = useState<ActiveStage | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
 
   const totalDeals = useMemo(
     () => ACTIVE_STAGES.reduce((sum, s) => sum + columns[s].length, 0),
@@ -134,6 +233,48 @@ export default function PipelineView({
       ),
     [columns]
   );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveOverStage(null);
+    if (!over) return;
+    const dealId = active.id as string;
+    const newStage = over.id as ActiveStage;
+    const currentStage = ACTIVE_STAGES.find((s) =>
+      columns[s].some((d) => d.id === dealId)
+    );
+    if (!currentStage || currentStage === newStage) return;
+
+    const movingDeal = columns[currentStage].find((d) => d.id === dealId)!;
+
+    setColumns((prev) => ({
+      ...prev,
+      [currentStage]: prev[currentStage].filter((d) => d.id !== dealId),
+      [newStage]: [{ ...movingDeal, stage: newStage }, ...prev[newStage]],
+    }));
+
+    fetch(`/api/deals/${dealId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stage: newStage }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to update stage");
+        router.refresh();
+      })
+      .catch(() => {
+        setColumns((prev) => ({
+          ...prev,
+          [newStage]: prev[newStage].filter((d) => d.id !== dealId),
+          [currentStage]: [
+            { ...movingDeal, stage: currentStage },
+            ...prev[currentStage],
+          ],
+        }));
+        setDragError({ dealId, message: "Failed to move — try again" });
+        setTimeout(() => setDragError(null), 3000);
+      });
+  }
 
   function openCreate() {
     setForm(EMPTY_FORM);
@@ -232,102 +373,82 @@ export default function PipelineView({
       </div>
 
       {/* Board */}
-      <div className="grid grid-cols-4 gap-4 overflow-x-auto">
-        {ACTIVE_STAGES.map((stage) => {
-          const config = COLUMN_CONFIG[stage];
-          const deals = columns[stage];
-          const colValue = deals.reduce((sum, d) => sum + parseFloat(d.value), 0);
-          return (
-            <div key={stage} className="flex flex-col gap-2 min-w-[200px]">
-              {/* Column header */}
-              <div
-                className="flex items-center justify-between pb-2 border-b-2"
-                style={{ borderBottomColor: config.accentColor }}
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-2 h-2 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: config.accentColor }}
-                  />
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">
-                    {config.label}
-                  </span>
-                  <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-full px-1.5 py-0.5 font-semibold leading-none">
-                    {deals.length}
-                  </span>
-                </div>
-                {colValue > 0 && (
-                  <span className="text-xs text-slate-400 font-semibold">
-                    {formatCurrency(colValue)}
-                  </span>
-                )}
-              </div>
-
-              {/* Cards area */}
-              <div className="flex flex-col gap-2 min-h-[80px]">
-                {deals.length === 0 ? (
-                  <div className="flex items-center justify-center h-16 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700">
-                    <span className="text-xs text-slate-400 dark:text-slate-600">
-                      No deals
+      <DndContext
+        sensors={sensors}
+        onDragOver={(e) =>
+          setActiveOverStage(
+            (ACTIVE_STAGES as string[]).includes(String(e.over?.id))
+              ? (e.over!.id as ActiveStage)
+              : null
+          )
+        }
+        onDragEnd={handleDragEnd}
+      >
+        <div className="grid grid-cols-4 gap-4 overflow-x-auto">
+          {ACTIVE_STAGES.map((stage) => {
+            const config = COLUMN_CONFIG[stage];
+            const deals = columns[stage];
+            const colValue = deals.reduce(
+              (sum, d) => sum + parseFloat(d.value),
+              0
+            );
+            const isOver = activeOverStage === stage;
+            return (
+              <div key={stage} className="flex flex-col gap-2 min-w-[200px]">
+                {/* Column header */}
+                <div
+                  className="flex items-center justify-between pb-2 border-b-2"
+                  style={{ borderBottomColor: config.accentColor }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: config.accentColor }}
+                    />
+                    <span className="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                      {config.label}
+                    </span>
+                    <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-full px-1.5 py-0.5 font-semibold leading-none">
+                      {deals.length}
                     </span>
                   </div>
-                ) : (
-                  deals.map((deal, index) => {
-                    const displayName = deal.contact
-                      ? `${deal.contact.firstName} ${deal.contact.lastName}`
-                      : deal.company?.name ?? null;
-                    const initial = displayName
-                      ? displayName[0].toUpperCase()
-                      : "?";
-                    const errorMsg =
-                      dragError?.dealId === deal.id ? dragError.message : null;
-                    return (
-                      <div
+                  {colValue > 0 && (
+                    <span className="text-xs text-slate-400 font-semibold">
+                      {formatCurrency(colValue)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Cards area */}
+                <DroppableColumn stage={stage} isOver={isOver}>
+                  {deals.length === 0 ? (
+                    <div className="flex items-center justify-center h-16 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700">
+                      <span className="text-xs text-slate-400 dark:text-slate-600">
+                        No deals
+                      </span>
+                    </div>
+                  ) : (
+                    deals.map((deal, index) => (
+                      <DraggableCard
                         key={deal.id}
+                        deal={deal}
+                        index={index}
+                        accentColor={config.accentColor}
+                        dragError={
+                          dragError?.dealId === deal.id
+                            ? dragError.message
+                            : null
+                        }
                         onClick={() => openEdit(deal)}
-                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 cursor-pointer hover:shadow-md transition-shadow select-none"
-                        style={{
-                          borderTopWidth: "3px",
-                          borderTopColor: config.accentColor,
-                        }}
-                      >
-                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 leading-snug">
-                          {deal.title}
-                        </p>
-                        {displayName && (
-                          <div className="flex items-center gap-1.5 mb-2">
-                            <div
-                              className={`w-4 h-4 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 ${avatarColor(index)}`}
-                            >
-                              {initial}
-                            </div>
-                            <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                              {displayName}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                            {formatCurrency(deal.value)}
-                          </span>
-                          <span className="text-xs text-slate-400">
-                            {shortDate(deal.expectedCloseDate)}
-                          </span>
-                        </div>
-                        {errorMsg && (
-                          <p className="text-xs text-rose-500 mt-1.5">
-                            {errorMsg}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
+                      />
+                    ))
+                  )}
+                </DroppableColumn>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </DndContext>
 
       {/* Deal modal (create + edit) */}
       <Modal

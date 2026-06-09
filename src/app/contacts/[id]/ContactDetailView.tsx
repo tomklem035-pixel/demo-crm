@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { statusColor } from "@/lib/format";
+import { formatCurrency, formatDate, stageColor, statusColor } from "@/lib/format";
 
 type ContactStatus = "LEAD" | "QUALIFIED" | "CUSTOMER" | "CHURNED";
 type DealStage =
@@ -66,6 +66,15 @@ export default function ContactDetailView({
   const titleLine = [contact.title, contact.company?.name]
     .filter(Boolean)
     .join(" · ");
+
+  const pipelineDeals = useMemo(
+    () => contact.deals.filter((d) => d.stage !== "CLOSED_LOST"),
+    [contact.deals]
+  );
+  const pipelineValue = useMemo(
+    () => pipelineDeals.reduce((sum, d) => sum + parseFloat(d.value), 0),
+    [pipelineDeals]
+  );
 
   return (
     <div>
@@ -155,10 +164,66 @@ export default function ContactDetailView({
 
       {/* Tab content */}
       {tab === "deals" && (
-        <div className="card p-10 flex flex-col items-center justify-center gap-2 text-center">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Deals list — implemented in Task 4.
-          </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {contact.deals.length}{" "}
+              {contact.deals.length === 1 ? "deal" : "deals"}
+              {pipelineDeals.length > 0 &&
+                ` · ${formatCurrency(pipelineValue)} pipeline`}
+            </p>
+            <button className="btn-primary" onClick={() => {}}>
+              + New Deal
+            </button>
+          </div>
+          {contact.deals.length === 0 ? (
+            <div className="card p-10 flex flex-col items-center justify-center gap-2 text-center">
+              <p className="font-medium text-slate-700 dark:text-slate-300">
+                No deals yet.
+              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Create the first deal for this contact.
+              </p>
+            </div>
+          ) : (
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
+                    <tr>
+                      <th className="table-th">Title</th>
+                      <th className="table-th">Stage</th>
+                      <th className="table-th">Value</th>
+                      <th className="table-th">Expected Close</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {contact.deals.map((deal) => (
+                      <tr
+                        key={deal.id}
+                        className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40"
+                      >
+                        <td className="table-td font-medium text-slate-900 dark:text-slate-100">
+                          {deal.title}
+                        </td>
+                        <td className="table-td">
+                          <span className={`pill ${stageColor(deal.stage)}`}>
+                            {deal.stage.replace(/_/g, " ")}
+                          </span>
+                        </td>
+                        <td className="table-td">
+                          {formatCurrency(deal.value)}
+                        </td>
+                        <td className="table-td">
+                          {formatDate(deal.expectedCloseDate)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
       {tab === "activity" && (

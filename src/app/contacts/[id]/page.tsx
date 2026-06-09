@@ -9,7 +9,7 @@ export default async function ContactDetailPage({
 }: {
   params: { id: string };
 }) {
-  const [contact, companies, contacts] = await Promise.all([
+  const [contact, companies, contacts, activities, tasks] = await Promise.all([
     prisma.contact.findUnique({
       where: { id: params.id },
       include: {
@@ -25,6 +25,16 @@ export default async function ContactDetailPage({
       orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
       select: { id: true, firstName: true, lastName: true },
     }),
+    prisma.activity.findMany({
+      where: { contactId: params.id },
+      orderBy: { createdAt: "desc" },
+      include: { deal: { select: { id: true, title: true } } },
+    }),
+    prisma.task.findMany({
+      where: { contactId: params.id, completed: false },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+      include: { deal: { select: { id: true, title: true } } },
+    }),
   ]);
 
   if (!contact) notFound();
@@ -32,19 +42,32 @@ export default async function ContactDetailPage({
   const serializedContact = {
     ...contact,
     company: contact.company
-      ? { ...contact.company, annualRevenue: contact.company.annualRevenue.toString() }
+      ? {
+          ...contact.company,
+          annualRevenue: contact.company.annualRevenue.toString(),
+        }
       : null,
-    deals: contact.deals.map((d) => ({
-      ...d,
-      value: d.value.toString(),
-    })),
+    deals: contact.deals.map((d) => ({ ...d, value: d.value.toString() })),
   };
+
+  const serializedActivities = activities.map((a) => ({
+    ...a,
+    createdAt: a.createdAt.toISOString(),
+  }));
+
+  const serializedTasks = tasks.map((t) => ({
+    ...t,
+    dueDate: t.dueDate?.toISOString() ?? null,
+    createdAt: t.createdAt.toISOString(),
+  }));
 
   return (
     <ContactDetailView
       contact={serializedContact}
       companies={companies}
       contacts={contacts}
+      initialActivities={serializedActivities}
+      initialTasks={serializedTasks}
     />
   );
 }

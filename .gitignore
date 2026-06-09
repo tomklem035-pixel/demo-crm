@@ -23,3 +23,6 @@ prisma/*.db-journal
 
 # Brainstorming companion
 .superpowers/
+
+# TypeScript build cache
+tsconfig.tsbuildinfo

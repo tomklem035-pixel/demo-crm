@@ -21,11 +21,11 @@ export default function Sidebar() {
       <div className="px-6 py-6 border-b border-slate-200 dark:border-slate-800">
         <Link href="/" className="flex items-center gap-2">
           <div className="h-9 w-9 rounded-lg bg-brand-600 text-white grid place-items-center font-bold">
-            D
+            S
           </div>
           <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Demo CRM</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Northwind Demo Co.</div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Sheds CRM</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Sheds Co.</div>
           </div>
         </Link>
       </div>

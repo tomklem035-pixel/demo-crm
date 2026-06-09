@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import Sidebar from "@/components/Sidebar";
 
 export const metadata: Metadata = {
-  title: "Demo CRM",
-  description: "A simple CRM demo built with Next.js, Prisma, and PostgreSQL",
+  title: "Sheds CRM",
+  description: "Sheds CRM",
 };
 
 const themeInitScript = `

@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       },
       include: {
         deal: { select: { id: true, title: true } },
+        contact: { select: { id: true, firstName: true, lastName: true } },
       },
     });
     return NextResponse.json(activity, { status: 201 });

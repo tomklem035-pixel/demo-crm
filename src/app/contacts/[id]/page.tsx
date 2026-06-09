@@ -31,6 +31,9 @@ export default async function ContactDetailPage({
 
   const serializedContact = {
     ...contact,
+    company: contact.company
+      ? { ...contact.company, annualRevenue: contact.company.annualRevenue.toString() }
+      : null,
     deals: contact.deals.map((d) => ({
       ...d,
       value: d.value.toString(),

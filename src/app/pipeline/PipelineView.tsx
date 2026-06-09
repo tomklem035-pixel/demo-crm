@@ -215,6 +215,7 @@ export default function PipelineView({
   const [formError, setFormError] = useState<string | null>(null);
   const [dragError, setDragError] = useState<{ dealId: string; message: string } | null>(null);
   const [activeOverStage, setActiveOverStage] = useState<ActiveStage | null>(null);
+  const [dragPending, setDragPending] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -235,6 +236,7 @@ export default function PipelineView({
   );
 
   function handleDragEnd(event: DragEndEvent) {
+    if (dragPending) return;
     const { active, over } = event;
     setActiveOverStage(null);
     if (!over) return;
@@ -247,6 +249,7 @@ export default function PipelineView({
 
     const movingDeal = columns[currentStage].find((d) => d.id === dealId)!;
 
+    setDragPending(true);
     setColumns((prev) => ({
       ...prev,
       [currentStage]: prev[currentStage].filter((d) => d.id !== dealId),
@@ -261,6 +264,7 @@ export default function PipelineView({
       .then((res) => {
         if (!res.ok) throw new Error("Failed to update stage");
         router.refresh();
+        setDragPending(false);
       })
       .catch(() => {
         setColumns((prev) => ({
@@ -273,6 +277,7 @@ export default function PipelineView({
         }));
         setDragError({ dealId, message: "Failed to move — try again" });
         setTimeout(() => setDragError(null), 3000);
+        setDragPending(false);
       });
   }
 

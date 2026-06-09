@@ -55,7 +55,13 @@ export async function POST(req: NextRequest) {
       },
     });
     return NextResponse.json(deal, { status: 201 });
-  } catch {
+  } catch (e: any) {
+    if (e?.code === "P2003") {
+      return NextResponse.json(
+        { error: "Referenced company or contact not found" },
+        { status: 400 },
+      );
+    }
     return NextResponse.json({ error: "Failed to create deal" }, { status: 500 });
   }
 }

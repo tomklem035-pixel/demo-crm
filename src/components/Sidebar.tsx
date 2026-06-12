@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import Image from "next/image";
 import ThemeToggle from "./ThemeToggle";
 
 const links = [
@@ -19,14 +20,8 @@ export default function Sidebar() {
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col border-r border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-800">
       <div className="px-6 py-6 border-b border-slate-200 dark:border-slate-800">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-lg bg-brand-600 text-white grid place-items-center font-bold">
-            S
-          </div>
-          <div>
-            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Sheds CRM</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Sheds Co.</div>
-          </div>
+        <Link href="/">
+          <Image src="/sheds.png" alt="SHEDS" width={120} height={40} className="h-10 w-auto" priority />
         </Link>
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">

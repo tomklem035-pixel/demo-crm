@@ -28,7 +28,7 @@ export async function POST() {
   let url: string | null =
     "https://graph.microsoft.com/v1.0/me/messages" +
     `?$top=100&$orderby=receivedDateTime desc` +
-    `&$filter=receivedDateTime ge ${sinceIso}` +
+    `&$filter=receivedDateTime ge '${sinceIso}'` +
     `&$select=id,subject,bodyPreview,receivedDateTime,sender,toRecipients`;
 
   try {

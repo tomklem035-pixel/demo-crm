@@ -1,11 +1,22 @@
 import { NextAuthOptions } from "next-auth";
+import { JWT } from "next-auth/jwt";
 import AzureADProvider from "next-auth/providers/azure-ad";
 
 if (!process.env.NEXTAUTH_SECRET) {
   throw new Error("NEXTAUTH_SECRET environment variable is required");
 }
+if (!process.env.AZURE_AD_CLIENT_ID || !process.env.AZURE_AD_CLIENT_SECRET) {
+  throw new Error("AZURE_AD_CLIENT_ID and AZURE_AD_CLIENT_SECRET are required");
+}
 
-async function refreshAccessToken(token: any) {
+const GRAPH_SCOPES =
+  "openid email profile offline_access Contacts.Read Mail.Read Calendars.Read";
+
+async function refreshAccessToken(token: JWT): Promise<JWT> {
+  if (!token.refreshToken) {
+    return { ...token, error: "RefreshAccessTokenError" };
+  }
+
   const tenantId = process.env.AZURE_AD_TENANT_ID ?? "common";
   const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 
@@ -17,7 +28,7 @@ async function refreshAccessToken(token: any) {
       client_secret: process.env.AZURE_AD_CLIENT_SECRET!,
       grant_type: "refresh_token",
       refresh_token: token.refreshToken,
-      scope: "openid email profile offline_access Contacts.Read Mail.Read Calendars.Read",
+      scope: GRAPH_SCOPES,
     }),
   });
 
@@ -27,12 +38,12 @@ async function refreshAccessToken(token: any) {
     return { ...token, error: "RefreshAccessTokenError" };
   }
 
+  const { error: _removed, ...rest } = token;
   return {
-    ...token,
+    ...rest,
     accessToken: data.access_token,
     refreshToken: data.refresh_token ?? token.refreshToken,
     expiresAt: Math.floor(Date.now() / 1000) + data.expires_in,
-    error: undefined,
   };
 }
 
@@ -43,10 +54,7 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.AZURE_AD_CLIENT_SECRET!,
       tenantId: process.env.AZURE_AD_TENANT_ID ?? "common",
       authorization: {
-        params: {
-          scope:
-            "openid email profile offline_access Contacts.Read Mail.Read Calendars.Read",
-        },
+        params: { scope: GRAPH_SCOPES },
       },
     }),
   ],
@@ -58,26 +66,26 @@ export const authOptions: NextAuthOptions = {
           ...token,
           accessToken: account.access_token,
           refreshToken: account.refresh_token,
-          expiresAt: account.expires_at,
+          expiresAt: account.expires_at ?? Math.floor(Date.now() / 1000) + 3600,
         };
       }
-      // Return token as-is if not yet expired (5 min buffer)
       if (
         typeof token.expiresAt === "number" &&
         Date.now() < token.expiresAt * 1000 - 5 * 60 * 1000
       ) {
         return token;
       }
-      // Refresh the token
       return refreshAccessToken(token);
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken as string | undefined;
+      session.error = token.error as string | undefined;
       return session;
     },
     async signIn({ profile }) {
       const allowed = process.env.ALLOWED_EMAIL;
       if (!allowed) return true;
+      // Azure AD may use preferred_username instead of email
       const email = profile?.email ?? (profile as any)?.preferred_username;
       if (!email) return false;
       return email.toLowerCase() === allowed.toLowerCase();

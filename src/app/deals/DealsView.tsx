@@ -82,7 +82,10 @@ export default function DealsView({
     return deals.filter((d) => {
       if (stageFilter !== "ALL" && d.stage !== stageFilter) return false;
       if (!q) return true;
-      return [d.title, d.company?.name ?? ""]
+      const contactName = d.contact
+        ? `${d.contact.firstName} ${d.contact.lastName}`
+        : "";
+      return [d.title, d.company?.name ?? "", contactName]
         .join(" ")
         .toLowerCase()
         .includes(q);
@@ -200,7 +203,7 @@ export default function DealsView({
         <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
           <input
             className="input max-w-xs"
-            placeholder="Search by title or company..."
+            placeholder="Search by title, company or contact..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />

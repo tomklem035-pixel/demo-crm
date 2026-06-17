@@ -93,7 +93,8 @@ export const authOptions: NextAuthOptions = {
       // Azure AD may use preferred_username instead of email
       const email = profile?.email ?? (profile as any)?.preferred_username;
       if (!email) return false;
-      return email.toLowerCase() === allowed.toLowerCase();
+      const allowedList = allowed.split(",").map((e) => e.trim().toLowerCase());
+      return allowedList.includes(email.toLowerCase());
     },
   },
   pages: {

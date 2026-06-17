@@ -32,9 +32,14 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
     }),
   });
 
-  const data = await res.json();
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    return { ...token, error: "RefreshAccessTokenError" };
+  }
 
-  if (!res.ok) {
+  if (!res.ok || !data) {
     return { ...token, error: "RefreshAccessTokenError" };
   }
 
@@ -43,7 +48,7 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
     ...rest,
     accessToken: data.access_token,
     refreshToken: data.refresh_token ?? token.refreshToken,
-    expiresAt: Math.floor(Date.now() / 1000) + data.expires_in,
+    expiresAt: Math.floor(Date.now() / 1000) + (data.expires_in ?? 3600),
   };
 }
 

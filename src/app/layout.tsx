@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import Sidebar from "@/components/Sidebar";
+import Providers from "@/components/Providers";
+import ClientShell from "@/components/ClientShell";
 
 export const metadata: Metadata = {
   title: "Sheds CRM",
@@ -26,12 +27,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
-        <div className="min-h-screen flex">
-          <Sidebar />
-          <main className="flex-1 min-w-0">
-            <div className="mx-auto max-w-7xl px-6 py-8">{children}</div>
-          </main>
-        </div>
+        <Providers>
+          <ClientShell>{children}</ClientShell>
+        </Providers>
       </body>
     </html>
   );

@@ -2,13 +2,6 @@ import { NextAuthOptions } from "next-auth";
 import { JWT } from "next-auth/jwt";
 import AzureADProvider from "next-auth/providers/azure-ad";
 
-if (!process.env.NEXTAUTH_SECRET) {
-  throw new Error("NEXTAUTH_SECRET environment variable is required");
-}
-if (!process.env.AZURE_AD_CLIENT_ID || !process.env.AZURE_AD_CLIENT_SECRET) {
-  throw new Error("AZURE_AD_CLIENT_ID and AZURE_AD_CLIENT_SECRET are required");
-}
-
 const GRAPH_SCOPES =
   "openid email profile offline_access Contacts.Read Mail.Read Calendars.Read";
 

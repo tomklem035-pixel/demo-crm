@@ -19,6 +19,9 @@ export async function POST() {
   if (!session?.accessToken) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
+  if (session.error === "RefreshAccessTokenError") {
+    return NextResponse.json({ error: "Session expired, please sign in again" }, { status: 401 });
+  }
 
   const since = new Date();
   since.setDate(since.getDate() - 90);
@@ -38,10 +41,8 @@ export async function POST() {
       });
       if (!res.ok) {
         const text = await res.text();
-        return NextResponse.json(
-          { error: `Graph API ${res.status}: ${text}` },
-          { status: 502 }
-        );
+        console.error("Graph API error (messages)", res.status, text);
+        return NextResponse.json({ error: `Graph API error: ${res.status}` }, { status: 502 });
       }
       const data: { value?: GraphMessage[]; "@odata.nextLink"?: string } =
         await res.json();
@@ -49,15 +50,24 @@ export async function POST() {
       url = data["@odata.nextLink"] ?? null;
     }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = err instanceof Error ? err.message : "Network error";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
-  const allContacts = await prisma.contact.findMany({
-    select: { id: true, email: true },
-  });
+  // Pre-fetch all CRM contacts and already-synced email IDs
+  const [allContacts, syncedActivities] = await Promise.all([
+    prisma.contact.findMany({ select: { id: true, email: true } }),
+    prisma.activity.findMany({
+      where: { body: { startsWith: "[outlook-msg:" } },
+      select: { body: true },
+    }),
+  ]);
+
   const emailToContactId = new Map(
     allContacts.map((c) => [c.email.toLowerCase(), c.id])
+  );
+  const syncedMsgIds = new Set(
+    syncedActivities.map((a) => a.body.split("\n")[0])
   );
 
   let created = 0;
@@ -65,11 +75,7 @@ export async function POST() {
 
   for (const msg of messages) {
     const prefix = `[outlook-msg:${msg.id}]`;
-
-    const existing = await prisma.activity.findFirst({
-      where: { body: { startsWith: prefix } },
-    });
-    if (existing) { skipped++; continue; }
+    if (syncedMsgIds.has(prefix)) { skipped++; continue; }
 
     const addresses = [
       msg.sender?.emailAddress?.address?.toLowerCase(),
@@ -91,6 +97,7 @@ export async function POST() {
     await prisma.activity.create({
       data: { type: "NOTE", body, contactId },
     });
+    syncedMsgIds.add(prefix);
     created++;
   }
 

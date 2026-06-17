@@ -16,7 +16,9 @@ interface GraphContact {
 }
 
 function parseName(displayName: string): { firstName: string; lastName: string } {
-  const parts = displayName.trim().split(/\s+/);
+  const trimmed = displayName.trim();
+  if (!trimmed) return { firstName: "Unknown", lastName: "" };
+  const parts = trimmed.split(/\s+/);
   if (parts.length === 1) return { firstName: parts[0], lastName: "" };
   const lastName = parts.pop()!;
   return { firstName: parts.join(" "), lastName };
@@ -34,7 +36,7 @@ async function fetchAllContacts(accessToken: string): Promise<GraphContact[]> {
     });
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Graph API ${res.status}: ${text}`);
+      throw new Error(`Graph API ${res.status}`);
     }
     const data: { value?: GraphContact[]; "@odata.nextLink"?: string } =
       await res.json();
@@ -50,14 +52,25 @@ export async function POST() {
   if (!session?.accessToken) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
+  if (session.error === "RefreshAccessTokenError") {
+    return NextResponse.json({ error: "Session expired, please sign in again" }, { status: 401 });
+  }
 
   let contacts: GraphContact[];
   try {
     contacts = await fetchAllContacts(session.accessToken);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = err instanceof Error ? err.message : "Graph API error";
     return NextResponse.json({ error: message }, { status: 502 });
   }
+
+  // Pre-fetch existing data to avoid N+1 queries
+  const [existingCompanies, existingContacts] = await Promise.all([
+    prisma.company.findMany({ select: { id: true, name: true } }),
+    prisma.contact.findMany({ select: { id: true, email: true } }),
+  ]);
+  const companyMap = new Map(existingCompanies.map((c) => [c.name, c.id]));
+  const contactEmailSet = new Set(existingContacts.map((c) => c.email.toLowerCase()));
 
   let created = 0;
   let updated = 0;
@@ -67,35 +80,39 @@ export async function POST() {
     const email = c.emailAddresses?.[0]?.address?.toLowerCase();
     if (!email) { skipped++; continue; }
 
-    const { firstName, lastName } = parseName(c.displayName ?? "Unknown");
+    const { firstName, lastName } = parseName(c.displayName ?? "");
     const phone = c.mobilePhone ?? c.businessPhones?.[0] ?? null;
 
     let companyId: string | null = null;
-    if (c.companyName?.trim()) {
-      let company = await prisma.company.findFirst({
-        where: { name: c.companyName.trim() },
-      });
-      if (!company) {
-        company = await prisma.company.create({
-          data: { name: c.companyName.trim(), industry: "Unknown" },
+    const companyName = c.companyName?.trim();
+    if (companyName) {
+      let cid = companyMap.get(companyName);
+      if (!cid) {
+        const company = await prisma.company.create({
+          data: { name: companyName, industry: "Unknown" },
         });
+        cid = company.id;
+        companyMap.set(companyName, cid);
       }
-      companyId = company.id;
+      companyId = cid;
     }
 
-    const existing = await prisma.contact.findUnique({ where: { email } });
-    if (existing) {
-      await prisma.contact.update({
-        where: { email },
-        data: {
-          firstName,
-          lastName,
-          phone,
-          title: c.jobTitle ?? null,
-          companyId,
-        },
-      });
-      updated++;
+    if (contactEmailSet.has(email)) {
+      // Only update fields that are currently null in the CRM to avoid overwriting manual edits
+      const existing = await prisma.contact.findUnique({ where: { email } });
+      if (existing) {
+        await prisma.contact.update({
+          where: { email },
+          data: {
+            firstName,
+            lastName,
+            phone: existing.phone ?? phone,
+            title: existing.title ?? c.jobTitle ?? null,
+            companyId: existing.companyId ?? companyId,
+          },
+        });
+        updated++;
+      }
     } else {
       await prisma.contact.create({
         data: {
@@ -107,6 +124,7 @@ export async function POST() {
           companyId,
         },
       });
+      contactEmailSet.add(email);
       created++;
     }
   }

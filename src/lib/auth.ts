@@ -3,7 +3,7 @@ import { JWT } from "next-auth/jwt";
 import AzureADProvider from "next-auth/providers/azure-ad";
 
 const GRAPH_SCOPES =
-  "openid email profile offline_access Contacts.Read Mail.Read Calendars.Read";
+  "openid email profile offline_access Contacts.Read Mail.Read Mail.Send Calendars.Read";
 
 async function refreshAccessToken(token: JWT): Promise<JWT> {
   if (!token.refreshToken) {

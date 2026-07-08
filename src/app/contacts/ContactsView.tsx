@@ -60,6 +60,12 @@ export default function ContactsView({
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendSubject, setSendSubject] = useState("");
+  const [sendBody, setSendBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendSuccess, setSendSuccess] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -151,6 +157,35 @@ export default function ContactsView({
     }
   }
 
+  async function sendUpdateEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await fetch("/api/outlook/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: sendSubject,
+          body: sendBody,
+          recipientEmails: filtered.map((c) => c.email),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error ?? "Send failed");
+      }
+      setSendSuccess(`Sent to ${data.sent} contacts.`);
+      setSendSubject("");
+      setSendBody("");
+      setSendOpen(false);
+    } catch (err: any) {
+      setSendError(err.message ?? "Something went wrong");
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -172,6 +207,12 @@ export default function ContactsView({
         }
       />
 
+      {sendSuccess && (
+        <div className="mb-4 text-sm text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-emerald-200 dark:ring-emerald-500/30 rounded-lg px-3 py-2">
+          {sendSuccess}
+        </div>
+      )}
+
       <div className="card overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
           <input
@@ -192,6 +233,16 @@ export default function ContactsView({
               </option>
             ))}
           </select>
+          <button
+            className="btn-secondary ml-auto"
+            disabled={filtered.length === 0}
+            onClick={() => {
+              setSendError(null);
+              setSendOpen(true);
+            }}
+          >
+            Send update email ({filtered.length})
+          </button>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full">
@@ -376,6 +427,57 @@ export default function ContactsView({
             </button>
             <button type="submit" className="btn-primary" disabled={submitting}>
               {submitting ? "Saving..." : form.id ? "Save changes" : "Create contact"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={sendOpen}
+        onClose={() => setSendOpen(false)}
+        title="Send update email"
+      >
+        <form onSubmit={sendUpdateEmail} className="space-y-4">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Sending to {filtered.length} contact{filtered.length === 1 ? "" : "s"} currently shown
+            (matching your search/status filter).
+          </p>
+          <div>
+            <label className="label">Subject</label>
+            <input
+              className="input"
+              required
+              value={sendSubject}
+              onChange={(e) => setSendSubject(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label">Body</label>
+            <textarea
+              className="input"
+              rows={8}
+              required
+              value={sendBody}
+              onChange={(e) => setSendBody(e.target.value)}
+            />
+          </div>
+
+          {sendError && (
+            <div className="text-sm text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-500/10 ring-1 ring-rose-200 dark:ring-rose-500/30 rounded-lg px-3 py-2">
+              {sendError}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setSendOpen(false)}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={sending}>
+              {sending ? "Sending..." : `Send to ${filtered.length}`}
             </button>
           </div>
         </form>

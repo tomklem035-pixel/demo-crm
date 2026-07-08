@@ -31,7 +31,7 @@ export async function POST() {
   let url: string | null =
     "https://graph.microsoft.com/v1.0/me/messages" +
     `?$top=100&$orderby=receivedDateTime desc` +
-    `&$filter=receivedDateTime ge '${sinceIso}'` +
+    `&$filter=receivedDateTime ge ${sinceIso}` +
     `&$select=id,subject,bodyPreview,receivedDateTime,sender,toRecipients`;
 
   try {
@@ -79,7 +79,7 @@ export async function POST() {
 
     const addresses = [
       msg.sender?.emailAddress?.address?.toLowerCase(),
-      ...msg.toRecipients.map((r) => r.emailAddress.address.toLowerCase()),
+      ...msg.toRecipients.map((r) => r.emailAddress?.address?.toLowerCase()),
     ].filter(Boolean) as string[];
 
     const contactId = addresses
